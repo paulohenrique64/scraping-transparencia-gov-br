@@ -1,6 +1,6 @@
 import asyncio
+from workflows.consulta_pessoa_fisica import consulta_pessoa_fisica
 from playwright.async_api import async_playwright
-from pages.portal_page import PortalPage
 
 async def main():
     async with async_playwright() as p:
@@ -19,9 +19,12 @@ async def main():
             Object.defineProperty(navigator, 'webdriver', { get: () => false });
         """)
 
-        page = await context.new_page()
-        teste = PortalPage(page, "Paulo Henrique")
-        await teste.consultar_pessoa_fisica()
+        dados = [
+
+        ]
+
+        tarefas = [consulta_pessoa_fisica(await context.new_page(), dado) for dado in dados]
+        await asyncio.gather(*tarefas)
 
         await context.close()
         await browser.close()

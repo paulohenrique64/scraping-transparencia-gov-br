@@ -6,7 +6,7 @@ from playwright.async_api import async_playwright
 
 async def consulta_pessoa_fisica(search_data, social_filter, data_screenshot):
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
 
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64)...',

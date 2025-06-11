@@ -12,7 +12,7 @@ async def main():
             extra_http_headers={
                 "Accept-Language": "pt-BR,pt;q=0.9",
                 "Referer": "https://portaldatransparencia.gov.br/"
-            }
+            },
         )
 
         await context.add_init_script("""

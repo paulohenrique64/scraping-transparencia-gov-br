@@ -5,17 +5,23 @@ class PortalPage:
         self.page = page
     
     async def buscar_pessoa_fisica(self, search_data):
-        await self.page.goto("https://portaldatransparencia.gov.br/pessoa/visao-geral")
+        await self.page.goto("https://portaldatransparencia.gov.br/pessoa/visao-geral", wait_until="load")
+        await asyncio.sleep(5)
         await self.page.locator("#button-consulta-pessoa-fisica").click()
-        await self.page.locator("#termo").fill(search_data["data"])
+        await asyncio.sleep(5)
         await self.page.locator("#accept-all-btn").click()
-        await asyncio.sleep(3)
+        await asyncio.sleep(5)
+        await self.page.locator("#termo").fill(search_data["data"])
+        await asyncio.sleep(5)
         await self.page.get_by_role("button", name="Refine a Busca").click()
+        await asyncio.sleep(5)
         await self.page.click('label[for="beneficiarioProgramaSocial"]')
+        await asyncio.sleep(5)
         await self.page.click("#btnConsultarPF")
-        await asyncio.sleep(3)
+        await asyncio.sleep(5)
 
-        matched_person_urls = []
+        matched_person_url = None
+        go_to_next_page_count = 0
 
         # buscando por nome
         if search_data["type"] == "nome":
@@ -31,21 +37,35 @@ class PortalPage:
                     link = await item.locator("a").get_attribute("href")
                     name = await item.locator(".link-busca-nome").inner_html()
                     current_page_matched_person_urls.append(name.lower())
-                    matched_person_urls.append(f'https://portaldatransparencia.gov.br{link}')
 
-                if search_data["type"] == "nome":
-                    can_go_to_next_page = True
-                    
-                can_go_to_next_page = False
+                    if name.lower().strip() == search_data["data"].lower().strip():
+                        matched_person_url = (f'https://portaldatransparencia.gov.br{link}')
+
+                can_go_to_next_page = True
+
+                # será possível ir para a proxima pagina se:
+                #   - o nome nao for encontrado na pagina atual em 2 buscas
+                #   - existir proxima pagina
                 for name in current_page_matched_person_urls:
-                    if name == self.person_data.lower():
-                        can_go_to_next_page = True
+                    # print(f"{name.lower().strip()} == {search_data["data"].lower().strip()}")
+                    if name.lower().strip() == search_data["data"].lower().strip():
+                        can_go_to_next_page = False
                 
+                next_button = self.page.locator("#paginacao").locator('.pagination li[class$="next"]')
+
+                if go_to_next_page_count > 2 \
+                    or await next_button.count() == 0 \
+                    or await self.page.locator("#boxPaginacaoBuscaLista").get_attribute("style") == "display: none;":
+                    can_go_to_next_page = False
+      
                 if can_go_to_next_page == True:
                     await self.page.get_by_text("Próxima").click()
                     await asyncio.sleep(10)
+                    go_to_next_page_count = go_to_next_page_count + 1
                 else:
-                    return matched_person_urls
+                    if matched_person_url == None:
+                        raise RuntimeError(f"Foram encontrados 0 resultados para o termo {search_data["data"]}")
+                    return matched_person_url
 
         # buscando por cpf ou nis
         listitem = self.page.locator("#resultados").get_by_role("listitem") 
@@ -55,13 +75,15 @@ class PortalPage:
             item = listitem.nth(i)
             link = await item.locator("a").get_attribute("href")
             name = await item.locator(".link-busca-nome").inner_html()
-            matched_person_urls.append(f'https://portaldatransparencia.gov.br{link}')
+            matched_person_url = f'https://portaldatransparencia.gov.br{link}'
 
-        return matched_person_urls
+        if matched_person_url is None:
+            raise RuntimeError(f"Não foi possível retornar os dados no tempo de resposta solicitado")
+        return matched_person_url
     
     async def coletar_dados_pessoa_fisica(self, person_url):
         await asyncio.sleep(10)
-        await self.page.goto(person_url)
+        await self.page.goto(person_url, wait_until="load")
         await asyncio.sleep(5)
         
         person_data = {}
@@ -102,7 +124,7 @@ class PortalPage:
 
             # Voltando para a página da pessoa física selecionada
             await self.page.go_back()
-            await asyncio.sleep(5)
+            await asyncio.sleep(15)
 
         person_data["recebimentos"] = recebimentos
         return person_data, screenshot_bytes
@@ -111,53 +133,63 @@ class PortalPage:
         await asyncio.sleep(10)
         await self.page.goto(recurso_url, wait_until="load")
         await asyncio.sleep(5)
-        await self.page.locator(".dataTables_length").locator("select").click()
-        await self.page.select_option('select[name$="_length"]', '30')
-        await asyncio.sleep(5)
 
-        recursos = []
-        has_next_page = True
+        recursos_totais = []
+
+        dados_detalhados_list = self.page.locator(".dados-detalhados")
+        dados_detalhados_list_count = await dados_detalhados_list.count()
+
+        # loop for por cada tabela
+        for i in range(dados_detalhados_list_count):
+            dados_detalhados = dados_detalhados_list.nth(i)
+            recursos = []
+            has_next_page = True
+
+            # TODO: resolver
+            if i != 0:
+                await dados_detalhados.click()
         
-        while has_next_page == True:
-            lista_rows = self.page.locator(".dados-detalhados").get_by_role("row")
-            count_recursos = await lista_rows.count()
+            while has_next_page == True:
+                rows_list = dados_detalhados.get_by_role("row")
+                recursos_count = await rows_list.count()
+                
+                if len(recursos) == 0:
+                    row = rows_list.nth(0)
+                    ths = row.locator("th")
+                    count_ths = await ths.count()
+                    cabecalho = []
+
+                    for i in range(count_ths):
+                        cabecalho.append(await ths.nth(i).inner_html())
+
+                    recursos.append(cabecalho)
+
+                for i in range(recursos_count):
+                    # pular cabeçalho
+                    if i == 0:
+                        continue
+
+                    row = rows_list.nth(i)
+                    spans = row.locator("span")
+                    recurso = []
+
+                    count_span = await spans.count()
             
-            if len(recursos) == 0:
-                row = lista_rows.nth(0)
-                ths = row.locator("th")
-                count_ths = await ths.count()
-                cabecalho = []
+                    for j in range(count_span):
+                        span = spans.nth(j)
+                        data = await span.inner_html()
+                        recurso.append(data) 
 
-                for i in range(count_ths):
-                    cabecalho.append(await ths.nth(i).inner_html())
+                    recursos.append(recurso)
 
-                recursos.append(cabecalho)
+                next_button = dados_detalhados.locator('.box-paginacao li[id$="_next"][class$="disabled"]')
 
-            for i in range(count_recursos):
-                # pular cabeçalho
-                if i == 0:
-                    continue
+                if await next_button.count() > 0:
+                    has_next_page = False
+                else:
+                    await dados_detalhados.locator('.box-paginacao li[id$="_next"]').click()
+                    await asyncio.sleep(5)
+                    has_next_page = True
 
-                row = lista_rows.nth(i)
-                spans = row.locator("span")
-                recurso = []
-
-                count_span = await spans.count()
-        
-                for j in range(count_span):
-                    span = spans.nth(j)
-                    data = await span.inner_html()
-                    recurso.append(data) 
-
-                recursos.append(recurso)
-            
-            next_button = self.page.locator('.box-paginacao li[id$="_next"][class$="disabled"]')
-
-            if await next_button.count() > 0:
-                has_next_page = False
-            else:
-                await self.page.locator('.box-paginacao li[id$="_next"]').click()
-                await asyncio.sleep(5)
-                has_next_page = True
-
-        return recursos
+            recursos_totais.append(recursos)
+        return recursos_totais

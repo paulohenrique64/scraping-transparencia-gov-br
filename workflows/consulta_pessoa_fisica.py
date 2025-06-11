@@ -4,11 +4,12 @@ import os
 from pages.portal_page import PortalPage
 
 async def consulta_pessoa_fisica(page, search_data):
-    portal_page_1 = PortalPage(page)
-    matched_person_urls = await portal_page_1.buscar_pessoa_fisica(search_data)
+    portal_page = PortalPage(page)
 
-    for person_url in matched_person_urls:
-        person_data, screenshot_bytes = await portal_page_1.coletar_dados_pessoa_fisica(person_url)
+    try:
+        matched_person_url = await portal_page.buscar_pessoa_fisica(search_data)
+
+        person_data, screenshot_bytes = await portal_page.coletar_dados_pessoa_fisica(matched_person_url)
         screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
 
         person_storage_dirname = f"./data/{person_data['nome'].lower().replace(" ", "_")}{person_data['cpf'][3:11].replace(".", "_")}"
@@ -25,3 +26,5 @@ async def consulta_pessoa_fisica(page, search_data):
         # salva como imagem real .png:
         with open(f"{person_storage_dirname}/screenshot.png", "wb") as f:
             f.write(screenshot_bytes)
+    except RuntimeError as r:
+        print(f"{r}")

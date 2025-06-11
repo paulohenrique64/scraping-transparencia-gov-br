@@ -1,11 +1,13 @@
 import asyncio
 from exceptions.scraping_exceptions import CPFouNISNaoEncontrado, NomeNaoEncontrado, PortalInacessivel
 
+recebimento_tipos_permitidos = ["auxílio brasil", "auxílio emergencial", "bolsa família"]
+
 class PortalPage:
     def __init__(self, page):
         self.page = page
     
-    async def buscar_pessoa_fisica(self, search_data):
+    async def buscar_pessoa_fisica(self, search_data, social_filter):
         await self.page.goto("https://portaldatransparencia.gov.br/pessoa/visao-geral", wait_until="load")
         await asyncio.sleep(5)
         await self.page.locator("#button-consulta-pessoa-fisica").click()
@@ -13,13 +15,18 @@ class PortalPage:
         await self.page.locator("#accept-all-btn").click()
         await asyncio.sleep(5)
         await self.page.locator("#termo").fill(search_data["data"])
-        await asyncio.sleep(5)
-        await self.page.get_by_role("button", name="Refine a Busca").click()
-        await asyncio.sleep(5)
-        await self.page.click('label[for="beneficiarioProgramaSocial"]')
-        await asyncio.sleep(5)
-        await self.page.click("#btnConsultarPF")
-        await asyncio.sleep(5)
+        
+        if social_filter == True:
+            await asyncio.sleep(5)
+            await self.page.get_by_role("button", name="Refine a Busca").click()
+            await asyncio.sleep(5)
+            await self.page.click('label[for="beneficiarioProgramaSocial"]')
+            await asyncio.sleep(5)
+            await self.page.click("#btnConsultarPF")
+            await asyncio.sleep(5)
+        else:
+            await self.page.locator(".busca-indice").locator("[type=submit]").click()
+            await asyncio.sleep(5)
 
         matched_person_url = None
         go_to_next_page_count = 0
@@ -111,19 +118,26 @@ class PortalPage:
         screenshot_bytes = await self.page.screenshot()
         
         for i in range(count_recebimentos_elements):
-            recebimento = {}
-            tipo = await recebimentos_elements.nth(i).locator("strong").inner_html()
-            valor_recebido = await recebimentos_elements.nth(i).locator("tbody").locator("td").nth(3).inner_html()
+            elemento = recebimentos_elements.nth(i)
+            tipo = (await elemento.locator("strong").inner_html()).lower()
+            valor_recebido = await elemento.locator("tbody >> td:nth-child(4)").inner_html()
 
-            recebimento["tipo"] = tipo
-            recebimento["valor_recebido"] = valor_recebido.strip()
-            recebimento_recurso_url = f"https://portaldatransparencia.gov.br{await recebimentos_elements.nth(i).locator("a").get_attribute("href")}"
+            # verifica se tipo é permitido
+            if not any(tipo_permitido in tipo for tipo_permitido in recebimento_tipos_permitidos):
+                continue
 
-            recursos = await self.__coletar_recursos_pessoa_fisica__(recebimento_recurso_url)
-            recebimento["recursos"] = recursos
+            recebimento = {
+                "tipo": tipo,
+                "valor_recebido": valor_recebido.strip()
+            }
+
+            recurso_path = await elemento.locator("a").get_attribute("href")
+            recurso_url = f"https://portaldatransparencia.gov.br{recurso_path}"
+
+            recebimento["recursos"] = await self.__coletar_recursos_pessoa_fisica__(recurso_url)
             recebimentos.append(recebimento)
 
-            # Voltando para a página da pessoa física selecionada
+            # retorna para a página anterior
             await self.page.go_back()
             await asyncio.sleep(15)
 
@@ -146,7 +160,6 @@ class PortalPage:
             recursos = []
             has_next_page = True
 
-            # TODO: resolver
             if i != 0:
                 await dados_detalhados.click()
         

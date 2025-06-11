@@ -4,7 +4,7 @@ import json
 import os
 from playwright.async_api import async_playwright
 
-async def consulta_pessoa_fisica(search_data):
+async def consulta_pessoa_fisica(search_data, social_filter, data_screenshot):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
 
@@ -24,7 +24,7 @@ async def consulta_pessoa_fisica(search_data):
         portal_page = PortalPage(await context.new_page())
 
         try:
-            matched_person_url = await portal_page.buscar_pessoa_fisica(search_data)
+            matched_person_url = await portal_page.buscar_pessoa_fisica(search_data, social_filter)
 
             person_data, screenshot_bytes = await portal_page.coletar_dados_pessoa_fisica(matched_person_url)
             screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
@@ -43,6 +43,9 @@ async def consulta_pessoa_fisica(search_data):
             # salva como imagem real .png:
             with open(f"{person_storage_dirname}/screenshot.png", "wb") as f:
                 f.write(screenshot_bytes)
+
+            if data_screenshot == True:
+                person_data["base64_screenshot"] = screenshot_base64
 
             return person_data
         except RuntimeError as r:

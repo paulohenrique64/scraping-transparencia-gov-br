@@ -1,4 +1,5 @@
 import asyncio
+from exceptions.scraping_exceptions import CPFouNISNaoEncontrado, NomeNaoEncontrado, PortalInacessivel
 
 class PortalPage:
     def __init__(self, page):
@@ -64,7 +65,7 @@ class PortalPage:
                     go_to_next_page_count = go_to_next_page_count + 1
                 else:
                     if matched_person_url == None:
-                        raise RuntimeError(f"Foram encontrados 0 resultados para o termo {search_data["data"]}")
+                        raise NomeNaoEncontrado(f"Foram encontrados 0 resultados para o termo {search_data["data"]}")
                     return matched_person_url
 
         # buscando por cpf ou nis
@@ -78,7 +79,7 @@ class PortalPage:
             matched_person_url = f'https://portaldatransparencia.gov.br{link}'
 
         if matched_person_url is None:
-            raise RuntimeError(f"Não foi possível retornar os dados no tempo de resposta solicitado")
+            raise CPFouNISNaoEncontrado(f"Não foi possível retornar os dados no tempo de resposta solicitado")
         return matched_person_url
     
     async def coletar_dados_pessoa_fisica(self, person_url):

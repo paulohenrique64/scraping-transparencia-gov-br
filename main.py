@@ -1,32 +1,27 @@
-import asyncio
-from workflows.consulta_pessoa_fisica import consulta_pessoa_fisica
-from playwright.async_api import async_playwright
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from exceptions.scraping_exceptions import CPFouNISNaoEncontrado, NomeNaoEncontrado
+from services.consulta_service import consulta_pessoa_fisica
 
-async def main():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+app = FastAPI(title="API de Consulta Pessoa Física")
 
-        context = await browser.new_context(
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64)...',
-            locale='pt-BR',
-            extra_http_headers={
-                "Accept-Language": "pt-BR,pt;q=0.9",
-                "Referer": "https://portaldatransparencia.gov.br/"
-            },
-        )
+@app.get("/consulta-pessoa-fisica")
+async def consulta(search_data: str):
+    try:
+        person_data = await consulta_pessoa_fisica(search_data_classifier_and_builder(search_data))
+        return person_data
+    except (CPFouNISNaoEncontrado, NomeNaoEncontrado) as e:
+        return JSONResponse(status_code=422, content={"erro": str(e)})
 
-        await context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', { get: () => false });
-        """)
 
-        dados = [
+def search_data_classifier_and_builder(search_data: str):
+    type = "nome"
+    numeros = ''.join(c for c in search_data if c.isdigit())
+    
+    if len(numeros) == 11:
+        type = "nis/cpf"
 
-        ]
-
-        tarefas = [consulta_pessoa_fisica(await context.new_page(), dado) for dado in dados]
-        await asyncio.gather(*tarefas)
-
-        await context.close()
-        await browser.close()
-
-asyncio.run(main())
+    return {
+        "data": search_data,
+        "type": type
+    }

@@ -1,29 +1,48 @@
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
-from exceptions.scraping_exceptions import CPFouNISNaoEncontrado, NomeNaoEncontrado
-from services.consulta_service import consulta_pessoa_fisica
+from services.consulta_service import consultar_dados_pessoa_fisica
 
-app = FastAPI(title="API de Consulta Pessoa Física")
+from exceptions.scraping_exceptions import (
+    CPFouNISNaoEncontrado,
+    NomeNaoEncontrado,
+    PortalInacessivel,
+    TempoLimiteExcedido,
+    ErroInesperadoDuranteConsulta
+)
+
+app = FastAPI(title="API de Consulta Pessoa Física no Portal da Transparência")
+
+
+@app.get("/")
+def hello_world():
+    return {"message": "hello, world!"}
+
 
 @app.get("/consulta-pessoa-fisica")
-async def consulta(search_data: str, 
-                   social_filter: bool = Query(default=False), 
-                   data_screenshot: bool = Query(default=False)):
+async def consulta_pessoa_fisica(
+    identificador: str,
+    incluir_filtro_social: bool = Query(default=False),
+):
     try:
-        person_data = await consulta_pessoa_fisica(search_data_classifier_and_builder(search_data), social_filter, data_screenshot)
-        return person_data
-    except (CPFouNISNaoEncontrado, NomeNaoEncontrado) as e:
+        search_data = classificar_e_estruturar_identificador(identificador)
+        dados_pessoa = await consultar_dados_pessoa_fisica(search_data, incluir_filtro_social)
+        return dados_pessoa
+
+    except (CPFouNISNaoEncontrado, NomeNaoEncontrado, PortalInacessivel, TempoLimiteExcedido) as e:
         return JSONResponse(status_code=422, content={"erro": str(e)})
 
+    except ErroInesperadoDuranteConsulta as e:
+        return JSONResponse(status_code=500, content={"erro": str(e)})
 
-def search_data_classifier_and_builder(search_data: str):
-    type = "nome"
-    numeros = ''.join(c for c in search_data if c.isdigit())
+
+def classificar_e_estruturar_identificador(identificador: str):
+    tipo = "nome"
+    numeros = ''.join(c for c in identificador if c.isdigit())
     
     if len(numeros) == 11:
-        type = "nis/cpf"
+        tipo = "nis/cpf"
 
     return {
-        "data": search_data,
-        "type": type
+        "identificador": identificador,
+        "tipo": tipo
     }

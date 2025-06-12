@@ -1,19 +1,36 @@
 import base64
-from pages.portal_page import PortalPage
 import json
 import os
-from playwright.async_api import async_playwright
 
-async def consulta_pessoa_fisica(search_data, social_filter, data_screenshot):
+from pages.portal_page import PortalPage
+from playwright.async_api import async_playwright
+from dotenv import load_dotenv
+
+from exceptions.scraping_exceptions import (
+    ErroInesperadoDuranteConsulta,
+    TempoLimiteExcedido,
+    PortalInacessivel,
+    CPFouNISNaoEncontrado,
+    NomeNaoEncontrado,
+    ElementoNaoEncontrado,
+    FalhaAoColetarDados
+)
+
+load_dotenv()
+
+url_base_portal_transparencia = os.getenv("URL_BASE_PORTAL_TRANSPARENCIA")
+path_base_armazenamento_pessoa = os.getenv("PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA")
+
+async def consultar_dados_pessoa_fisica(search_data, aplicar_filtro_social=False):
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False)
 
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64)...',
             locale='pt-BR',
             extra_http_headers={
                 "Accept-Language": "pt-BR,pt;q=0.9",
-                "Referer": "https://portaldatransparencia.gov.br/"
+                "Referer": f"{url_base_portal_transparencia}"
             },
         )
 
@@ -21,35 +38,43 @@ async def consulta_pessoa_fisica(search_data, social_filter, data_screenshot):
             Object.defineProperty(navigator, 'webdriver', { get: () => false });
         """)
 
-        portal_page = PortalPage(await context.new_page())
+        pagina_portal = PortalPage(await context.new_page())
 
         try:
-            matched_person_url = await portal_page.buscar_pessoa_fisica(search_data, social_filter)
-
-            person_data, screenshot_bytes = await portal_page.coletar_dados_pessoa_fisica(matched_person_url)
+            url_resultado = await pagina_portal.buscar_pessoa_fisica(search_data, aplicar_filtro_social)
+            dados_pessoa, screenshot_bytes = await pagina_portal.coletar_dados_pessoa_fisica(url_resultado)
             screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
 
-            person_storage_dirname = f"./data/{person_data['nome'].lower().replace(" ", "_")}{person_data['cpf'][3:11].replace(".", "_")}"
-            os.makedirs(f"{person_storage_dirname}", exist_ok=True)
+            nome_normalizado = dados_pessoa['nome'].lower().replace(" ", "_")
+            cpf_fragmento_normalizado = dados_pessoa['cpf'][3:11].replace(".", "_")
 
-            # salva os dados da pessoa
-            with open(f"{person_storage_dirname}/data.json", "w", encoding="utf-8") as f:
-                json.dump(person_data, f, indent=4, ensure_ascii=False)
-                
-            # salva a imagem codificada em base64 (em formato texto)
-            with open(f"{person_storage_dirname}/screenshot_base64.txt", "w", encoding="utf-8") as f:
+            path_pessoa = f"{path_base_armazenamento_pessoa}/{nome_normalizado}{cpf_fragmento_normalizado}"
+            os.makedirs(path_pessoa, exist_ok=True)
+
+            # Salva dados da pessoa
+            with open(f"{path_pessoa}/dados.json", "w", encoding="utf-8") as f:
+                json.dump(dados_pessoa, f, indent=4, ensure_ascii=False)
+
+            # Salva a imagem em base64 (texto)
+            with open(f"{path_pessoa}/screenshot_base64.txt", "w", encoding="utf-8") as f:
                 f.write(screenshot_base64)
 
-            # salva como imagem real .png:
-            with open(f"{person_storage_dirname}/screenshot.png", "wb") as f:
+            # Salva como imagem .png
+            with open(f"{path_pessoa}/screenshot.png", "wb") as f:
                 f.write(screenshot_bytes)
 
-            if data_screenshot == True:
-                person_data["base64_screenshot"] = screenshot_base64
+            dados_pessoa["screenshot_base64"] = screenshot_base64
 
-            return person_data
-        except RuntimeError as r:
-            print(f"{r}")
+            return dados_pessoa
 
-        await context.close()
-        await browser.close()
+        except TempoLimiteExcedido:
+            raise
+        except (PortalInacessivel, CPFouNISNaoEncontrado, NomeNaoEncontrado, ElementoNaoEncontrado, FalhaAoColetarDados) as e:
+            raise e
+        except TimeoutError:
+            raise TempoLimiteExcedido("Tempo de resposta excedido.")
+        except Exception as e:
+            raise ErroInesperadoDuranteConsulta(f"Erro inesperado: {e}")
+        finally:
+            await context.close()
+            await browser.close()

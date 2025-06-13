@@ -1,6 +1,6 @@
-import os
-import time
 import requests
+import time
+import os
 
 from fastapi import Depends, FastAPI, HTTPException, Header, Query
 from fastapi.responses import JSONResponse
@@ -24,19 +24,40 @@ CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 X_API_KEY = os.getenv("X_API_KEY")
 
-app = FastAPI(title="API de Consulta Pessoa Física no Portal da Transparência")
+app = FastAPI(
+    title="API de Consulta Pessoa Física no Portal da Transparência",
+    description="API para consultar dados de pessoa física no Portal da Transparência com autenticação via OAuth2 (Auth0).",
+    version="1.0.0",
+    docs_url="/docs",      
+)
 
 token_em_cache = None
 token_expiracao = 0
 
-@app.get("/")
+
+@app.get("/", summary="Endpoint de teste", tags=["Geral"])
 def hello_world():
+    """
+    Endpoint simples para verificar se a API está no ar.
+    """
     return {"message": "hello, world!"}
 
-@app.get("/consulta-pessoa-fisica")
+
+@app.get(
+    "/consulta-pessoa-fisica",
+    summary="Consulta dados de pessoa física",
+    tags=["Consulta"],
+    response_description="Dados detalhados da pessoa física consultada",
+    responses={
+        200: {"description": "Consulta realizada com sucesso"},
+        422: {"description": "Erro na consulta: dados não encontrados ou limite excedido"},
+        500: {"description": "Erro inesperado no servidor"},
+        401: {"description": "Usuário não autenticado"},
+    }
+)
 async def consulta_pessoa_fisica(
-    identificador: str,
-    incluir_filtro_social: bool = Query(default=False),
+    identificador: str = Query(..., description="Nome, CPF ou NIS da pessoa a ser consultada"),
+    incluir_filtro_social: bool = Query(default=False, description="Incluir filtro social na consulta"),
     user: dict = Depends(get_current_user)
 ):
     try:
@@ -49,8 +70,18 @@ async def consulta_pessoa_fisica(
     except ErroInesperadoDuranteConsulta as e:
         return JSONResponse(status_code=500, content={"erro": str(e)})
 
-@app.get("/get-token")
-def get_token(x_api_key: str = Header(...)):
+
+@app.get(
+    "/get-token",
+    summary="Gera token de acesso via chave de API",
+    tags=["Autenticação"],
+    response_description="Token de acesso válido para consumir endpoints protegidos",
+    responses={
+        200: {"description": "Token gerado com sucesso"},
+        401: {"description": "Chave de API inválida"},
+    }
+)
+def get_token(x_api_key: str = Header(..., description="Chave de API para autorização")):
     if x_api_key != X_API_KEY:
         raise HTTPException(status_code=401, detail="Chave para geração de token inválida.")
 

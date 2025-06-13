@@ -18,10 +18,29 @@ from exceptions.scraping_exceptions import (
 
 load_dotenv()
 
-URL_BASE_PORTAL_TRANSPARENCIA = os.getenv("URL_BASE_PORTAL_TRANSPARENCIA")
-PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA = os.getenv("PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA")
+URL_BASE_PORTAL_TRANSPARENCIA = os.getenv("URL_BASE_PORTAL_TRANSPARENCIA") # URL base do Portal da Transparência
+PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA = os.getenv("PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA") # Caminho base para salvar os dados coletados localmente
 
 async def consultar_dados_pessoa_fisica(identificador, aplicar_filtro_social=False):
+    """
+    Função principal para consultar dados de pessoa física no Portal da Transparência.
+
+    Parâmetros:
+    - identificador (str): nome, CPF ou NIS da pessoa a ser consultada.
+    - aplicar_filtro_social (bool): se True, aplica filtro para beneficiário de programa social.
+
+    Retorna:
+    - dict com os dados da pessoa física e screenshot em base64.
+
+    Funcionamento:
+    - Inicializa o browser com Playwright.
+    - Cria contexto com headers personalizados para simular navegação real.
+    - Cria uma instância da classe PortalPage que possui métodos que executam ações na página.
+    - Classifica o identificador para saber se é nome ou CPF/NIS.
+    - Executa a busca da pessoa física e coleta os dados.
+    - Salva localmente os dados em arquivos JSON e as imagens em formato png e base64.
+    - Retorna os dados coletados.
+    """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
 
@@ -52,15 +71,15 @@ async def consultar_dados_pessoa_fisica(identificador, aplicar_filtro_social=Fal
             path_pessoa = f"{PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA}/{nome_normalizado}{cpf_fragmento_normalizado}"
             os.makedirs(path_pessoa, exist_ok=True)
 
-            # Salva dados da pessoa
+            # Salva os dados JSON
             with open(f"{path_pessoa}/dados.json", "w", encoding="utf-8") as f:
                 json.dump(dados_pessoa, f, indent=4, ensure_ascii=False)
 
-            # Salva a imagem em base64 (texto)
+            # Salva screenshot base64 como texto
             with open(f"{path_pessoa}/screenshot_base64.txt", "w", encoding="utf-8") as f:
                 f.write(screenshot_base64)
 
-            # Salva como imagem .png
+            # Salva screenshot como imagem PNG
             with open(f"{path_pessoa}/screenshot.png", "wb") as f:
                 f.write(screenshot_bytes)
 
@@ -81,6 +100,16 @@ async def consultar_dados_pessoa_fisica(identificador, aplicar_filtro_social=Fal
             await browser.close()
 
 def classificar_e_estruturar_identificador(identificador: str):
+    """
+    Classifica o identificador recebido como 'nome' ou 'nis/cpf'.
+
+    Funcionamento:
+    - Se o identificador contiver 11 dígitos, é classificado como 'nis/cpf'.
+    - Caso contrário, 'nome'.
+
+    Retorna:
+    - dict com chaves "identificador" (string) e "tipo" (string).
+    """
     tipo = "nome"
     numeros = ''.join(c for c in identificador if c.isdigit())
     

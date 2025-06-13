@@ -13,8 +13,8 @@ from exceptions.scraping_exceptions import (
 
 load_dotenv()
 
-url_base_portal_transparencia = os.getenv("URL_BASE_PORTAL_TRANSPARENCIA")
-tipos_recebimentos_permitidos =  os.getenv("TIPOS_RECEBIMENTO_PERMITIDOS").split(",")
+URL_BASE_PORTAL_TRANSPARENCIA = os.getenv("URL_BASE_PORTAL_TRANSPARENCIA")
+TIPOS_RECEBIMENTO_PERMITIDOS =  os.getenv("TIPOS_RECEBIMENTO_PERMITIDOS").split(",")
 
 class PortalPage:
     def __init__(self, page):
@@ -22,7 +22,7 @@ class PortalPage:
     
     async def buscar_pessoa_fisica(self, search_data, aplicar_filtro_social):
         try:
-            await self.page.goto(f"{url_base_portal_transparencia}/pessoa/visao-geral", wait_until="load")
+            await self.page.goto(f"{URL_BASE_PORTAL_TRANSPARENCIA}/pessoa/visao-geral", wait_until="load")
         except Exception:
             raise PortalInacessivel("Não foi possível acessar o Portal da Transparência.")
 
@@ -70,7 +70,7 @@ class PortalPage:
                         pagina_atual_url_resultados.append(nome.lower())
 
                         if nome.lower().strip() == search_data["identificador"].lower().strip():
-                            url_resultado = (f'{url_base_portal_transparencia}{link}')
+                            url_resultado = (f'{URL_BASE_PORTAL_TRANSPARENCIA}{link}')
 
                     avancar_para_proxima_pagina = True
 
@@ -108,7 +108,7 @@ class PortalPage:
                 item = listitem.nth(i)
                 link = await item.locator("a").get_attribute("href")
                 nome = await item.locator(".link-busca-nome").inner_html()
-                url_resultado = f'{url_base_portal_transparencia}{link}'
+                url_resultado = f'{URL_BASE_PORTAL_TRANSPARENCIA}{link}'
 
             if url_resultado is None:
                 raise CPFouNISNaoEncontrado(f"Não foi possível retornar os dados no tempo de resposta solicitado")
@@ -156,7 +156,7 @@ class PortalPage:
                 valor_recebido = await elemento.locator("tbody >> td:nth-child(4)").inner_html()
 
                 # verifica se tipo é permitido
-                if not any(tipo_permitido in tipo for tipo_permitido in tipos_recebimentos_permitidos):
+                if not any(tipo_permitido in tipo for tipo_permitido in TIPOS_RECEBIMENTO_PERMITIDOS):
                     continue
 
                 recebimento = {
@@ -165,7 +165,7 @@ class PortalPage:
                 }
 
                 recurso_path = await elemento.locator("a").get_attribute("href")
-                recurso_url = f"{url_base_portal_transparencia}{recurso_path}"
+                recurso_url = f"{URL_BASE_PORTAL_TRANSPARENCIA}{recurso_path}"
 
                 recebimento["recursos"] = await self.__coletar_recursos_pessoa_fisica__(recurso_url)
                 recebimentos.append(recebimento)
@@ -200,6 +200,7 @@ class PortalPage:
 
                 if i != 0:
                     await dados_detalhados.click()
+                    await asyncio.sleep(5)
             
                 while tem_proxima_pagina == True:
                     rows_list = dados_detalhados.get_by_role("row")

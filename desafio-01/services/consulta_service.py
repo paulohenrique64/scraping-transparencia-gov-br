@@ -18,10 +18,10 @@ from exceptions.scraping_exceptions import (
 
 load_dotenv()
 
-url_base_portal_transparencia = os.getenv("URL_BASE_PORTAL_TRANSPARENCIA")
-path_base_armazenamento_pessoa = os.getenv("PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA")
+URL_BASE_PORTAL_TRANSPARENCIA = os.getenv("URL_BASE_PORTAL_TRANSPARENCIA")
+PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA = os.getenv("PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA")
 
-async def consultar_dados_pessoa_fisica(search_data, aplicar_filtro_social=False):
+async def consultar_dados_pessoa_fisica(identificador, aplicar_filtro_social=False):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
 
@@ -30,7 +30,7 @@ async def consultar_dados_pessoa_fisica(search_data, aplicar_filtro_social=False
             locale='pt-BR',
             extra_http_headers={
                 "Accept-Language": "pt-BR,pt;q=0.9",
-                "Referer": f"{url_base_portal_transparencia}"
+                "Referer": f"{URL_BASE_PORTAL_TRANSPARENCIA}"
             },
         )
 
@@ -41,6 +41,7 @@ async def consultar_dados_pessoa_fisica(search_data, aplicar_filtro_social=False
         pagina_portal = PortalPage(await context.new_page())
 
         try:
+            search_data = classificar_e_estruturar_identificador(identificador)
             url_resultado = await pagina_portal.buscar_pessoa_fisica(search_data, aplicar_filtro_social)
             dados_pessoa, screenshot_bytes = await pagina_portal.coletar_dados_pessoa_fisica(url_resultado)
             screenshot_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
@@ -48,7 +49,7 @@ async def consultar_dados_pessoa_fisica(search_data, aplicar_filtro_social=False
             nome_normalizado = dados_pessoa['nome'].lower().replace(" ", "_")
             cpf_fragmento_normalizado = dados_pessoa['cpf'][3:11].replace(".", "_")
 
-            path_pessoa = f"{path_base_armazenamento_pessoa}/{nome_normalizado}{cpf_fragmento_normalizado}"
+            path_pessoa = f"{PATH_BASE_ARMAZENAMENTO_DADOS_PESSOA}/{nome_normalizado}{cpf_fragmento_normalizado}"
             os.makedirs(path_pessoa, exist_ok=True)
 
             # Salva dados da pessoa
@@ -78,3 +79,15 @@ async def consultar_dados_pessoa_fisica(search_data, aplicar_filtro_social=False
         finally:
             await context.close()
             await browser.close()
+
+def classificar_e_estruturar_identificador(identificador: str):
+    tipo = "nome"
+    numeros = ''.join(c for c in identificador if c.isdigit())
+    
+    if len(numeros) == 11:
+        tipo = "nis/cpf"
+
+    return {
+        "identificador": identificador,
+        "tipo": tipo
+    }

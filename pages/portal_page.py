@@ -71,67 +71,56 @@ class PortalPage:
 
         # Caso a busca seja por nome, realiza paginação e busca exata pelo nome
         if search_data["tipo"] == "nome":
-            try:
-                avancar_para_proxima_pagina = True
+            avancar_para_proxima_pagina = True
 
-                while avancar_para_proxima_pagina == True:
-                    listitem = self.page.locator("#resultados").get_by_role("listitem") 
-                    listitem_count = await listitem.count()
-                    pagina_atual_url_resultados = []
+            while avancar_para_proxima_pagina == True:
+                listitem = self.page.locator("#resultados").get_by_role("listitem") 
+                listitem_count = await listitem.count()
 
-                    for i in range(listitem_count):
-                        item = listitem.nth(i)
-                        link = await item.locator("a").get_attribute("href")
-                        nome = await item.locator(".link-busca-nome").inner_html()
-                        pagina_atual_url_resultados.append(nome.lower())
+                for i in range(listitem_count):
+                    item = listitem.nth(i)
+                    link = await item.locator("a").get_attribute("href")
+                    nome = await item.locator(".link-busca-nome").inner_html()
+                    url_resultado = (f'{URL_BASE_PORTAL_TRANSPARENCIA}{link}')
 
-                        # Se encontrar nome exatamente igual ao pesquisado, captura a URL resultado
-                        if nome.lower().strip() == search_data["identificador"].lower().strip():
-                            url_resultado = (f'{URL_BASE_PORTAL_TRANSPARENCIA}{link}')
-
-                    avancar_para_proxima_pagina = True
-
-                    # Verifica se o nome está na página atual, senão tenta avançar
-                    for nome in pagina_atual_url_resultados:
-                        if nome.lower().strip() == search_data["identificador"].lower().strip():
-                            avancar_para_proxima_pagina = False
-                    
-                    # Verifica se existe botão "próxima" e se paginações não excederam o limite de avanços definido (2)
-                    # Este limite foi definido para evitar buscas muito longas
-                    next_button = self.page.locator("#paginacao").locator('.pagination li[class$="next"]')
-
-                    if avancos_proxima_pagina_cont > 2 \
-                        or await next_button.count() == 0 \
-                        or await self.page.locator("#boxPaginacaoBuscaLista").get_attribute("style") == "display: none;":
-                        avancar_para_proxima_pagina = False
-        
-                    if avancar_para_proxima_pagina == True:
-                        await self.page.get_by_text("Próxima").click()
-                        await asyncio.sleep(10)
-                        avancos_proxima_pagina_cont = avancos_proxima_pagina_cont + 1
-                    else:
-                        if url_resultado == None:
-                            raise NomeNaoEncontrado(f"Foram encontrados 0 resultados para o termo {search_data["identificador"]}")
+                    if aplicar_filtro_social == True and search_data["identificador"].lower().strip() in nome.lower().strip():
                         return url_resultado
-            except Exception:
-                raise ElementoNaoEncontrado("Erro ao navegar pelos resultados da busca por nome.")
+
+                    # Se encontrar nome exatamente igual ao pesquisado, captura a URL resultado e a retorna
+                    if nome.lower().strip() == search_data["identificador"].lower().strip():
+                        return url_resultado
+
+                avancar_para_proxima_pagina = True
+    
+                # Verifica se existe botão "próxima" e se paginações não excederam o limite de avanços definido (2)
+                # Este limite foi definido para evitar buscas muito longas
+                next_button = self.page.locator("#paginacao").locator('.pagination li[class$="next"]')
+
+                if avancos_proxima_pagina_cont > 2 \
+                    or await next_button.count() == 0 \
+                    or await self.page.locator("#boxPaginacaoBuscaLista").get_attribute("style") == "display: none;":
+                    avancar_para_proxima_pagina = False
+    
+                if avancar_para_proxima_pagina == True:
+                    await self.page.get_by_text("Próxima").click()
+                    await asyncio.sleep(10)
+                    avancos_proxima_pagina_cont = avancos_proxima_pagina_cont + 1
+                else:
+                    raise NomeNaoEncontrado(f"Foram encontrados 0 resultados para o termo {search_data["identificador"]}")
 
         # Caso a busca seja por CPF ou NIS, tenta localizar diretamente
-        try:
-            listitem = self.page.locator("#resultados").get_by_role("listitem") 
-            listitem_count = await listitem.count()
+        listitem = self.page.locator("#resultados").get_by_role("listitem") 
+        listitem_count = await listitem.count()
 
-            for i in range(listitem_count):
-                item = listitem.nth(i)
-                link = await item.locator("a").get_attribute("href")
-                nome = await item.locator(".link-busca-nome").inner_html()
-                url_resultado = f'{URL_BASE_PORTAL_TRANSPARENCIA}{link}'
+        for i in range(listitem_count):
+            item = listitem.nth(i)
+            link = await item.locator("a").get_attribute("href")
+            nome = await item.locator(".link-busca-nome").inner_html()
+            url_resultado = f'{URL_BASE_PORTAL_TRANSPARENCIA}{link}'
 
-            if url_resultado is None:
-                raise CPFouNISNaoEncontrado(f"Não foi possível retornar os dados no tempo de resposta solicitado")
-            return url_resultado
-        except Exception:
-            raise ElementoNaoEncontrado("Erro ao processar os resultados da busca por CPF ou NIS.")
+        if url_resultado is None:
+            raise CPFouNISNaoEncontrado(f"Não foi possível retornar os dados no tempo de resposta solicitado")
+        return url_resultado
     
     async def coletar_dados_pessoa_fisica(self, url_pagina_pessoa_encontrada):
         """

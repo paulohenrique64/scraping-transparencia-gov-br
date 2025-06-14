@@ -42,7 +42,7 @@ async def consultar_dados_pessoa_fisica(identificador, aplicar_filtro_social=Fal
     - Retorna os dados coletados.
     """
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
 
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64)...',
@@ -89,7 +89,7 @@ async def consultar_dados_pessoa_fisica(identificador, aplicar_filtro_social=Fal
 
         except TempoLimiteExcedido:
             raise
-        except (PortalInacessivel, CPFouNISNaoEncontrado, NomeNaoEncontrado, ElementoNaoEncontrado, FalhaAoColetarDados) as e:
+        except (PortalInacessivel, CPFouNISNaoEncontrado, NomeNaoEncontrado) as e:
             raise e
         except TimeoutError:
             raise TempoLimiteExcedido("Tempo de resposta excedido.")

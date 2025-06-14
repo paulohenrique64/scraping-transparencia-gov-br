@@ -15,7 +15,9 @@ from exceptions.scraping_exceptions import (
     NomeNaoEncontrado,
     PortalInacessivel,
     TempoLimiteExcedido,
-    ErroInesperadoDuranteConsulta
+    ErroInesperadoDuranteConsulta,
+    ElementoNaoEncontrado,
+    FalhaAoColetarDados
 )
 
 load_dotenv()

@@ -3,8 +3,7 @@ FROM python:3.12-slim
 # Instala dependências do sistema e Playwright
 RUN apt-get update && apt-get install -y \
     wget gnupg curl unzip fonts-liberation libnss3 libatk-bridge2.0-0 \
-    libxss1 libasound2 libgbm1 libgtk-3-0 libxshmfence-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libxss1 libasound2 libgbm1 libgtk-3-0 libxshmfence-dev
 
 # Define diretório da aplicação
 WORKDIR /app

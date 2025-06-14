@@ -2,6 +2,7 @@ import asyncio
 import os
 
 from dotenv import load_dotenv
+from unidecode import unidecode
 
 from exceptions.scraping_exceptions import (
     CPFouNISNaoEncontrado,
@@ -190,7 +191,7 @@ class PortalPage:
 
                 recebimento = {
                     "tipo": tipo,
-                    "valor_recebido": valor_recebido.strip()
+                    "valor_recebido": valor_recebido.strip().replace("R$ ", "").replace(".", "")
                 }
 
                 recursos_path = await elemento.locator("a").get_attribute("href")
@@ -238,6 +239,7 @@ class PortalPage:
             for i in range(dados_detalhados_list_count):
                 dados_detalhados = dados_detalhados_list.nth(i)
                 recursos = []
+                cabecalho = []
                 tem_proxima_pagina = True
 
                 # Se não for a primeira tabela, expande a seção clicando
@@ -259,22 +261,21 @@ class PortalPage:
                         cabecalho = []
 
                         for i in range(count_ths):
-                            cabecalho.append(await ths.nth(i).inner_html())
-
-                        recursos.append(cabecalho)
+                            campo_cabecalho = await ths.nth(i).inner_html()
+                            cabecalho.append(unidecode(campo_cabecalho.lower().replace(" ", "_").replace("_(r$)", "")))
 
                     # Coleta dados de cada linha (exceto cabeçalho)
                     for i in range(1, recursos_count):
                         row = rows_list.nth(i)
                         spans = row.locator("span")
-                        recurso = []
+                        recurso = {}
 
                         count_span = await spans.count()
                 
                         for j in range(count_span):
                             span = spans.nth(j)
                             data = await span.inner_html()
-                            recurso.append(data) 
+                            recurso[cabecalho[j]] = data
 
                         recursos.append(recurso)
 

@@ -1,7 +1,9 @@
+import pytz
 import requests
 import time
 import os
 
+from datetime import datetime
 from fastapi import Depends, FastAPI, HTTPException, Header, Query
 from fastapi.responses import JSONResponse
 from services.consulta_service import consultar_dados_pessoa_fisica
@@ -60,6 +62,9 @@ async def consulta_pessoa_fisica(
     incluir_filtro_social: bool = Query(default=False, description="Incluir filtro social na consulta"),
     user: dict = Depends(get_current_user)
 ):
+    agora = datetime.now(pytz.timezone("America/Sao_Paulo"))
+    print(f"[{agora.strftime('%H:%M:%S')}] Identificador recebido para busca: {identificador}")
+    
     try:
         dados_pessoa = await consultar_dados_pessoa_fisica(identificador, incluir_filtro_social)
         return dados_pessoa
